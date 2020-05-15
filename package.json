@@ -1,0 +1,26 @@
+{
+  "name": "yestergit",
+  "version": "1.0.0",
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "bin": {
+    "ygit": "./lib/index.js"
+  },
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "chalk": "^4.0.0",
+    "commander": "^5.1.0",
+    "date-fns": "^2.13.0",
+    "lodash": "^4.17.15",
+    "simple-git": "^2.4.0",
+    "ts-node": "^8.10.1",
+    "typescript": "^3.9.2"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.151",
+    "@types/node": "^10"
+  }
+}
