@@ -2,7 +2,7 @@
 
 import { program } from "commander";
 import git from "simple-git/promise";
-import { flatten, groupBy } from "lodash";
+import { flatten, groupBy, uniq } from "lodash";
 import chalk from "chalk";
 
 program
@@ -14,6 +14,7 @@ program
   )
   .option("-s, --since <since>", "Filter by date range (default: 5 days ago)")
   .option("-r, --repo <repo>", "The Git repo to analyze (default: cwd)")
+  .option("-g, --github-links", "Show links to GitHub if available")
   .option(
     "-b, --base <base>",
     "The base branch to compare commits against (default: master)"
@@ -21,29 +22,37 @@ program
 
 program.parse(process.argv);
 
+const buildCommitUrl = (repo: string, hash: string) =>
+  ` ${repo}/commit/${hash} `;
+
 (async () => {
   const gitCmd = git(program.repo ?? process.cwd());
   const baseBranch = program.base ?? "master";
   const author: string = (
     program.author ?? (await gitCmd.raw(["config", "user.email"]))
   ).trim();
+  const githubLink = program.githubLinks
+    ? ((await gitCmd.remote(["show", "origin"])) as string).match(
+        /(https:\/\/github.com\/.+?\/.+?)\.git/
+      )?.[1] ?? null
+    : null;
 
   // Set filters for the author and the time range
   const defaultLogArgs = [
+    "--no-merges",
     "--author",
     author,
     "--since",
     program.since ?? "5 days ago",
   ];
 
-  // First, get all commits with given filters extract relevant branches
-  const branches = await gitCmd
-    .log([...defaultLogArgs, "--all"])
-    .then((l) =>
-      l.all
-        .map((c) => c.refs.replace("HEAD -> ", "").split(", ").pop()!)
-        .filter((r) => r && !r.startsWith("tag: ") && r !== "refs/stash")
-    );
+  // First, get all commits with given filters
+  const globalCommits = (await gitCmd.log([...defaultLogArgs, "--all"])).all;
+
+  // Extract the used branches
+  const branches = globalCommits
+    .map((c) => c.refs.replace("HEAD -> ", "").split(", ").pop()!)
+    .filter((r) => r && !r.startsWith("tag: ") && r !== "refs/stash");
 
   // For each branch, get all commits in the given time
   const allCommits = flatten(
@@ -51,13 +60,19 @@ program.parse(process.argv);
       branches.map(async (b) => {
         const commits = await gitCmd.log([
           ...defaultLogArgs,
-          "--no-merges",
           "--first-parent",
           `${baseBranch}..${b}`,
         ]);
         return commits.all.map((c) => ({ ...c, branch: b }));
       })
     )
+  );
+
+  // Find commits that don't belong to any branch
+  const usedHashes = new Set(allCommits.map((c) => c.hash));
+  const unusedCommits = globalCommits.filter((c) => !usedHashes.has(c.hash));
+  const groupedUnusedCommits = groupBy(unusedCommits, (c) =>
+    c.date.slice(0, 10)
   );
 
   // Group commits by date and branch
@@ -70,21 +85,49 @@ program.parse(process.argv);
     );
   }
 
+  const dates = uniq([
+    ...Object.keys(groupedUnusedCommits),
+    ...Object.keys(commitsByDate),
+  ]);
+
   // Log the results
-  for (const date of Object.keys(commitsByDateAndBranch).sort().reverse()) {
+  for (const date of dates.sort()) {
     console.log();
     console.log(chalk.green(date));
     console.log(chalk.green("=========="));
 
-    for (const branch of Object.keys(commitsByDateAndBranch[date]).sort()) {
-      console.log("  " + chalk.redBright(branch));
+    if (commitsByDateAndBranch[date]) {
+      for (const branch of Object.keys(commitsByDateAndBranch[date]).sort()) {
+        console.log("  " + chalk.redBright(branch));
 
-      for (const commit of commitsByDateAndBranch[date][branch]) {
+        for (const commit of commitsByDateAndBranch[date][branch]) {
+          console.log(
+            "    -",
+            `${commit.date.slice(11, 16)}:`,
+            commit.message,
+            chalk.gray(
+              githubLink
+                ? "\n     " + buildCommitUrl(githubLink, commit.hash)
+                : `(${commit.hash.slice(0, 7)})`
+            )
+          );
+        }
+      }
+    }
+
+    if (groupedUnusedCommits[date]) {
+      console.log("  " + chalk.red("unassociated commits"));
+
+      for (const commit of groupedUnusedCommits[date]) {
         console.log(
           "    -",
           `${commit.date.slice(11, 16)}:`,
           commit.message,
-          chalk.gray(`(${commit.hash.slice(0, 7)})`)
+          chalk.gray(
+            githubLink
+              ? "\n     " + buildCommitUrl(githubLink, commit.hash)
+              : `(${commit.hash.slice(0, 7)})`
+          )
         );
       }
     }
