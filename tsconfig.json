@@ -5,6 +5,7 @@
     "module": "commonjs",
     "rootDir": "src",
     "outDir": "lib",
+    "types": ["node"],
 
     /* Strict Type-Checking Options */
     "strict": true,
