@@ -4,7 +4,8 @@
   "license": "MIT",
   "main": "./lib/index.js",
   "bin": {
-    "ygit": "./lib/index.js"
+    "ygit": "./lib/index.js",
+    "yestergit": "./lib/index.js"
   },
   "scripts": {
     "start": "ts-node src/index.ts",
