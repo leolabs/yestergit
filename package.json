@@ -16,7 +16,7 @@
     "commander": "^5.1.0",
     "date-fns": "^2.13.0",
     "lodash": "^4.17.15",
-    "simple-git": "^2.4.0",
+    "simple-git": "^3.3.0",
     "ts-node": "^8.10.1",
     "typescript": "^3.9.2"
   },
